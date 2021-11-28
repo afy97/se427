@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+
+<body>
+    <div>
+        <div>
+            <textarea name="central" id="central" cols="128" rows="16" placeholder="input"></textarea>
+        </div>
+        <div>
+            <textarea name="nonce" id="nonce" cols="128" rows="16" placeholder="output"></textarea>
+        </div>
+        <div>
+            <button id="submit">calculate</button>
+        </div>
+    </div>
+
+    <script>
+        const logs = []
+
+        const sha256 = async (message) => {
+            const msgUint8   = new TextEncoder().encode(message)                             // encode as (utf-8) Uint8Array
+            const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8)               // hash the message
+            const hashArray  = Array.from(new Uint8Array(hashBuffer))                        // convert buffer to byte array
+            const hashHex    = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')  // convert bytes to hex string
+
+            return "0x" + hashHex
+        }
+
+        const encodePacked = async (central, nonce) => {
+            const cBuff = new Uint8Array(central.replace("0x", "").match(/[\w]{1,2}/g).map(i => parseInt(i, 16)))
+            const nBuff = new Uint8Array(  nonce.replace("0x", "").match(/[\w]{1,2}/g).map(i => parseInt(i, 16)))
+            const join  = new Uint8Array([...cBuff, ...nBuff])
+            const rBuff = await crypto.subtle.digest('SHA-256', join)
+            
+            return "0x" + Array.from(new Uint8Array(rBuff)).map(b => b.toString(16).padStart(2, '0')).join('')
+        }
+
+        const compareHex = (a, b) => {
+            a = a.toLowerCase()
+            b = b.toLowerCase()
+
+            if ((a.length !== b.length) || (a.indexOf('0x') < 0) || (b.indexOf('0x') < 0)) throw new Error(`Invalid input\n\ta: ${a}\n\tb: ${b}`)
+
+            for (let i = 2; i < a.length; i++) {
+                if (a.charAt(i) === b.charAt(i)) {
+                    continue
+                } else {
+                    if (parseInt(a.charAt(i), 16) < parseInt(b.charAt(i), 16)) {
+                        return -1
+                    } else {
+                        return 1
+                    }
+                }
+            }
+
+            return 0
+        }
+
+        const findCommonNonce = async (central) => {
+            let nonce = 0x0
+            let next  = 0x0
+            let flag  = true
+
+            logs.length = 0
+
+            while (flag) {
+                flag  = false
+                nonce = await sha256(Math.floor(Math.random() * Number.MAX_SAFE_INTEGER))
+
+                const log = {
+                    nonce: nonce,
+                    next: [],
+                    fail: []
+                }
+
+                for (let i = 0; i < central.length; i++) {
+                    next = await encodePacked(central[i], nonce)
+
+                    log.next.push(next)
+
+                    if (compareHex(next, central[i]) <= 0) {
+                        log.fail.push([i, next, central[i]])
+                        flag = true
+                        break
+                    }
+                }
+
+                logs.push(log)
+            }
+
+            console.log(logs)
+            console.log(nonce)
+
+            return nonce
+        }
+
+    </script>
+
+    <script>
+        const input  = document.getElementById("central")
+        const output = document.getElementById("nonce")
+        const submit = document.getElementById("submit")
+
+        let interval = 0
+
+        submit.addEventListener('click', async (event) => {
+            event.stopPropagation()
+            event.preventDefault()
+
+            output.innerHTML = "wait\n"
+
+            interval = setInterval(() => {
+                output.innerHTML += " . "
+            }, 500)
+
+            findCommonNonce(input.value.replace(/\s+/g, "").split(',')).then(nonce => {
+                output.innerHTML = nonce 
+            }).catch(err => {
+                output.innerHTML = err.message
+            }).finally(() => {
+                clearInterval(interval)
+            })
+        })
+    </script>
+</body>
+
+</html>

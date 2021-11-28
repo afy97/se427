@@ -11,17 +11,21 @@ contract Team7 is Ownable {
     }
     
     modifier indexLimited(int _sx, int _sy, int _ex, int _ey) {
+        require((0 <= _sx) && (0 <= _sy) && (0 <= _ex) && (0 <= _ey));
         require((_sx < 20) && (_sy < 20) && (_ex < 20) && (_ey < 20));
         require((_ex >= _sx) && (_ey >= _sy));
         _;
     }
 
     function _getAllFromArea(int _sx, int _sy, int _ex, int _ey) public indexLimited(_sx, _sy, _ex, _ey) view returns(bytes32[] memory) {
-        bytes32[] memory values = new bytes32[](uint(_ex - _sx) * uint(_ey - _sy));
+        int x = (_ex - _sx) + 1;
+        int y = (_ey - _sy) + 1;
         
-        for (int i = _sx; i < _ex; i++) {
-            for (int j = _sy; j < _ey; j++) {
-                values[uint(i * j)] = cc.getCellHash(i, j);
+        bytes32[] memory values = new bytes32[](uint(x * y));
+        
+        for (int i = 0; i < x; i++) {
+            for (int j = 0; j < y; j++) {
+                values[uint((i * x) + j)] = cc.getCellHash(i + _sx, j + _sy);
             }
         }
         
@@ -43,7 +47,7 @@ contract Team7 is Ownable {
             for (uint8 i = 0; i < cells.length; i++) {
                 next = sha256(abi.encodePacked(cells[i], nonce));
                 
-                if (next < cells[i]) {
+                if (next <= cells[i]) {
                     flag = true;
                     break;
                 }
@@ -108,5 +112,13 @@ contract Team7 is Ownable {
 
     function setCellPathContractAdress(address payable _address) external isOwner {
         cc = CellPathContract(_address);
+    }
+
+    function _encodeTestJoin(bytes32 _a, bytes32 _b) external pure returns(bytes32) {
+        return sha256(abi.encodePacked(_a, _b));
+    }
+
+    function _encodeTestSingle(bytes32 _a) external pure returns(bytes32) {
+        return sha256(abi.encodePacked(_a));
     }
 }
